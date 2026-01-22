@@ -3,134 +3,211 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Ultimate Cyber RGB Visualizer V2</title>
+    <title>Ultimate RGB Studio Pro</title>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Kantumruy+Pro:wght@300;700&display=swap');
 
         :root {
-            --primary-glow: #00f2ff;
-            --bg-dark: #020205;
+            --primary: #00f2ff;
+            --accent: #ff0055;
+            --bg: #050505;
         }
 
         body, html {
             margin: 0; padding: 0; width: 100%; height: 100%;
-            background-color: var(--bg-dark);
+            background-color: var(--bg);
             color: white; font-family: 'Kantumruy Pro', sans-serif;
             overflow: hidden;
         }
 
-        .grid-bg {
-            position: fixed; inset: 0;
-            background-image: linear-gradient(rgba(0, 242, 255, 0.03) 1px, transparent 1px),
-                              linear-gradient(90deg, rgba(0, 242, 255, 0.03) 1px, transparent 1px);
-            background-size: 60px 60px; z-index: 0;
+        /* ផ្នែក Background (Image/Video) */
+        #bg-layer {
+            position: fixed; inset: 0; z-index: 0;
+            background-size: cover; background-position: center;
+            opacity: 0.4; filter: blur(2px) brightness(0.7);
+            transition: 0.5s;
+        }
+        video#bg-video {
+            position: absolute; top: 50%; left: 50%;
+            width: 100%; height: 100%; object-fit: cover;
+            transform: translate(-50%, -50%);
         }
 
         canvas { position: absolute; top: 0; left: 0; z-index: 1; }
 
+        /* Shake Effect ពេល Bass បុក */
+        @keyframes shake {
+            0% { transform: translate(0, 0); }
+            25% { transform: translate(2px, -2px); }
+            50% { transform: translate(-2px, 2px); }
+            75% { transform: translate(2px, 2px); }
+            100% { transform: translate(0, 0); }
+        }
+        .bass-shake { animation: shake 0.1s infinite; }
+
+        /* UI Interface */
         .interface {
-            position: relative; z-index: 10;
-            height: 100vh; display: flex; flex-direction: column;
-            justify-content: space-between; padding: 40px; box-sizing: border-box;
-            pointer-events: none;
+            position: relative; z-index: 10; height: 100vh;
+            display: flex; flex-direction: column; justify-content: space-between;
+            padding: 30px; box-sizing: border-box; pointer-events: none;
+            transition: opacity 0.5s;
         }
+        .interface.hidden { opacity: 0; }
 
-        /* ម៉ោងប្តូរពណ៌ */
-        .clock-box {
-            background: rgba(0, 0, 0, 0.5);
-            padding: 20px; border-left: 5px solid var(--primary-glow);
-            backdrop-filter: blur(15px); transition: 0.3s;
-        }
-        #time { font-family: 'Orbitron'; font-size: 4rem; line-height: 1; transition: 0.1s; }
-        #date { font-size: 1rem; opacity: 0.7; margin-top: 5px; }
+        .top-bar { display: flex; justify-content: space-between; align-items: flex-start; }
 
-        /* ឈ្មោះបទចម្រៀង */
-        .song-info {
-            position: absolute; top: 60%; left: 50%; transform: translate(-50%, -50%);
-            text-align: center; pointer-events: auto;
+        .clock-widget {
+            text-align: left;
+            text-shadow: 0 0 15px rgba(0,0,0,0.8);
         }
-        .song-title-input {
-            background: none; border: none; color: white; font-family: 'Orbitron';
-            font-size: 2.2rem; text-align: center; width: 80vw; outline: none;
-            text-shadow: 0 0 10px rgba(255,255,255,0.5);
-        }
+        #time { font-family: 'Orbitron'; font-size: 3.5rem; line-height: 1; font-weight: bold; }
+        #date { font-size: 1rem; opacity: 0.8; margin-top: 5px; text-transform: uppercase; }
 
-        /* ផ្ទាំង Settings */
-        .controls {
-            position: fixed; right: 25px; top: 25px;
-            background: rgba(10, 10, 20, 0.9); padding: 25px;
-            border-radius: 15px; border: 1px solid rgba(0, 242, 255, 0.2);
-            display: flex; flex-direction: column; gap: 12px;
-            pointer-events: auto; z-index: 100;
-            transition: 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+        /* Recording Indicator */
+        .rec-indicator {
+            display: none; align-items: center; gap: 10px;
+            background: rgba(255, 0, 0, 0.2); padding: 5px 15px;
+            border-radius: 20px; border: 1px solid red;
         }
-        .controls.collapsed { transform: translateX(calc(100% + 40px)); }
-
-        .btn-toggle {
-            position: fixed; right: 25px; top: 25px;
-            z-index: 101; pointer-events: auto;
-            background: var(--bg-dark); border: 1px solid var(--primary-glow);
-            color: white; padding: 10px; border-radius: 8px; cursor: pointer;
+        .rec-dot {
+            width: 12px; height: 12px; background: red; border-radius: 50%;
+            animation: blink 1s infinite;
         }
+        @keyframes blink { 50% { opacity: 0; } }
 
+        /* Song Input */
+        .center-stage {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            text-align: center; width: 100%; pointer-events: auto;
+        }
+        .song-input {
+            background: transparent; border: none; color: white;
+            font-family: 'Orbitron'; font-size: 2rem; text-align: center;
+            width: 80%; outline: none; text-shadow: 0 0 10px black;
+            transition: 0.3s;
+        }
+        .song-input:focus { border-bottom: 2px solid var(--primary); background: rgba(0,0,0,0.5); }
+
+        /* Control Panel */
+        .controls-panel {
+            position: fixed; right: 20px; top: 50%; transform: translateY(-50%);
+            background: rgba(15, 15, 20, 0.9); padding: 20px;
+            border-radius: 15px; border: 1px solid rgba(255, 255, 255, 0.1);
+            display: flex; flex-direction: column; gap: 15px;
+            pointer-events: auto; z-index: 100; width: 220px;
+            backdrop-filter: blur(10px);
+            transition: transform 0.4s ease;
+        }
+        .controls-panel.collapsed { transform: translateY(-50%) translateX(120%); }
+
+        .section-title { font-size: 0.75rem; color: #888; margin-bottom: 5px; letter-spacing: 1px; }
+        
         .btn {
-            background: rgba(255,255,255,0.05); border: 1px solid var(--primary-glow);
-            color: white; padding: 8px; border-radius: 5px; cursor: pointer; font-size: 0.9rem;
+            background: rgba(255,255,255,0.05); border: 1px solid #444;
+            color: white; padding: 10px; border-radius: 8px; cursor: pointer;
+            transition: 0.2s; text-align: left; display: flex; align-items: center; gap: 10px;
+            font-family: 'Kantumruy Pro'; font-size: 0.9rem;
         }
-        .btn.active { background: var(--primary-glow); color: black; font-weight: bold; }
+        .btn:hover, .btn.active { background: var(--primary); color: black; border-color: var(--primary); font-weight: bold; }
+        .btn-rec { border-color: red; color: #ffaaaa; }
+        .btn-rec:hover { background: red; color: white; }
 
-        .setup-screen {
-            position: fixed; inset: 0; background: #000;
+        input[type="range"] { width: 100%; accent-color: var(--primary); }
+        input[type="file"] { display: none; }
+
+        .toggle-ui-btn {
+            position: fixed; bottom: 20px; right: 20px; z-index: 101;
+            background: rgba(0,0,0,0.5); border: 1px solid #555;
+            color: white; width: 40px; height: 40px; border-radius: 50%;
+            cursor: pointer; font-size: 1.2rem; pointer-events: auto;
+        }
+
+        /* Setup Screen */
+        .setup-overlay {
+            position: fixed; inset: 0; background: #000; z-index: 9999;
             display: flex; flex-direction: column; align-items: center; justify-content: center;
-            z-index: 9999;
+        }
+        .start-btn {
+            padding: 15px 40px; font-size: 1.5rem; background: var(--primary);
+            border: none; border-radius: 50px; cursor: pointer; font-family: 'Orbitron';
+            box-shadow: 0 0 30px var(--primary); font-weight: bold;
         }
     </style>
 </head>
 <body>
 
-    <div class="grid-bg"></div>
-    
-    <div id="setup" class="setup-screen">
-        <h1 style="color: #00f2ff; font-family: 'Orbitron'; letter-spacing: 5px;">AUDIO SYNC PRO</h1>
-        <button class="btn" onclick="startSystemAudio()" style="padding: 15px 50px; font-size: 1.2rem;">CONNECT SYSTEM AUDIO</button>
-        <p style="margin-top: 20px; opacity: 0.6;">(កុំភ្លេច Tick លើ "Share system audio")</p>
+    <div id="bg-layer"></div>
+
+    <canvas id="canvas"></canvas>
+
+    <div id="setup" class="setup-overlay">
+        <h1 style="color: var(--primary); font-family: 'Orbitron'; margin-bottom: 10px;">RGB STUDIO PRO</h1>
+        <p style="opacity: 0.7; margin-bottom: 30px;">System Audio • Recorder • Custom BG</p>
+        <button class="start-btn" onclick="initSystemAudio()">START ENGINE</button>
+        <p style="font-size: 0.8rem; margin-top: 20px; color: #555;">Select "Share System Audio" in the popup</p>
     </div>
 
-    <canvas id="mainCanvas"></canvas>
-
-    <div class="interface">
-        <div class="clock-box">
-            <div id="time">00:00:00</div>
-            <div id="date">LOADING...</div>
+    <div class="interface" id="ui-layer">
+        <div class="top-bar">
+            <div class="clock-widget">
+                <div id="time">00:00</div>
+                <div id="date">LOADING...</div>
+            </div>
+            <div class="rec-indicator" id="recIndicator">
+                <div class="rec-dot"></div> <span>RECORDING...</span>
+            </div>
         </div>
 
-        <div class="song-info">
-            <input type="text" class="song-title-input" value="NOW PLAYING: TYPE SONG NAME" onclick="this.select()">
+        <div class="center-stage">
+            <input type="text" class="song-input" value="TYPE SONG NAME HERE" onclick="this.select()">
         </div>
     </div>
 
-    <button class="btn-toggle" onclick="document.getElementById('controls').classList.toggle('collapsed')">⚙️ Settings</button>
+    <div class="controls-panel" id="controls">
+        <div>
+            <div class="section-title">VISUAL MODE</div>
+            <button class="btn active" onclick="setMode('mirror')">💎 Mirror Spectrum</button>
+            <button class="btn" onclick="setMode('circle')">⭕ Neon Circle</button>
+            <button class="btn" onclick="setMode('warp')">🚀 Starfield Warp</button>
+        </div>
 
-    <div class="controls collapsed" id="controls">
-        <h3 style="margin: 0; color: var(--primary-glow);">SETTINGS</h3>
-        <label>Visual Mode:</label>
-        <button class="btn active" id="m-bars" onclick="setMode('bars')">Bar Spectrum</button>
-        <button class="btn" id="m-circle" onclick="setMode('circle')">Radial Circle</button>
+        <div>
+            <div class="section-title">EFFECTS</div>
+            <label style="font-size: 0.8rem; display: flex; align-items: center; gap: 10px;">
+                <input type="checkbox" id="shakeToggle" checked> Bass Shake
+            </label>
+            <input type="range" id="sens" min="1" max="5" step="0.5" value="2.5" style="margin-top: 5px;">
+        </div>
+
+        <div>
+            <div class="section-title">BACKGROUND</div>
+            <button class="btn" onclick="document.getElementById('bgInput').click()">📁 Upload Image/Video</button>
+            <input type="file" id="bgInput" accept="image/*,video/*">
+        </div>
+
+        <div>
+            <div class="section-title">RECORDING</div>
+            <button class="btn btn-rec" id="recBtn" onclick="toggleRecording()">🔴 Start Recording</button>
+        </div>
         
-        <label>Intensity (Bass):</label>
-        <input type="range" id="sens" min="1" max="10" value="3">
-        
-        <p style="font-size: 0.7rem; opacity: 0.5;">* ពណ៌នឹងប្តូរលឿនតាមចង្វាក់ភ្លេង</p>
+        <div style="font-size: 0.7rem; text-align: center; opacity: 0.5; margin-top: 10px;">
+            H: Toggle Settings
+        </div>
     </div>
+
+    <button class="toggle-ui-btn" onclick="toggleUI()">👁️</button>
 
     <script>
-        const canvas = document.getElementById('mainCanvas');
+        const canvas = document.getElementById('canvas');
         const ctx = canvas.getContext('2d');
-        let audioCtx, analyser, dataArray;
-        let hue = 180;
-        let currentMode = 'bars';
+        let audioCtx, analyser, dataArray, source, dest;
+        let mediaRecorder, recordedChunks = [];
+        let isRecording = false;
+        let hue = 0;
+        let currentMode = 'mirror';
         let particles = [];
-
+        
+        // Resize logic
         function resize() {
             canvas.width = window.innerWidth;
             canvas.height = window.innerHeight;
@@ -138,108 +215,259 @@
         window.onresize = resize;
         resize();
 
-        class Particle {
-            constructor() { this.reset(); }
-            reset() {
-                this.x = Math.random() * canvas.width;
-                this.y = Math.random() * canvas.height;
-                this.size = Math.random() * 2 + 1;
-                this.vx = (Math.random() - 0.5) * 2;
-                this.vy = (Math.random() - 0.5) * 2;
-                this.life = Math.random();
-            }
-            update(vol) {
-                this.x += this.vx * (vol * 0.1);
-                this.y += this.vy * (vol * 0.1);
-                if (this.x < 0 || this.x > canvas.width || this.y < 0 || this.y > canvas.height) this.reset();
-            }
-            draw() {
-                ctx.fillStyle = `hsla(${hue}, 100%, 70%, ${this.life})`;
-                ctx.beginPath(); ctx.arc(this.x, this.y, this.size, 0, Math.PI*2); ctx.fill();
-            }
-        }
-
-        for(let i=0; i<100; i++) particles.push(new Particle());
-
-        async function startSystemAudio() {
+        // 1. Audio Initialization
+        async function initSystemAudio() {
             try {
-                const stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
+                const stream = await navigator.mediaDevices.getDisplayMedia({
+                    video: true, 
+                    audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false }
+                });
+
                 audioCtx = new AudioContext();
                 analyser = audioCtx.createAnalyser();
-                audioCtx.createMediaStreamSource(stream).connect(analyser);
-                analyser.fftSize = 256;
+                analyser.fftSize = 512; // High detail
+                analyser.smoothingTimeConstant = 0.85;
+
+                source = audioCtx.createMediaStreamSource(stream);
+                source.connect(analyser);
+                
+                // Destination សម្រាប់ Recording (Sound មិនចេញ Speaker ទេ បើមិន Connect ទៅ destination)
+                // យើងគ្រាន់តែ Connect ទៅ Analyser បានហើយ ព្រោះ User ឮតាម System ស្រាប់
+                
+                // Setup recording destination
+                dest = audioCtx.createMediaStreamDestination();
+                source.connect(dest);
+
                 dataArray = new Uint8Array(analyser.frequencyBinCount);
+                
                 document.getElementById('setup').style.display = 'none';
+                
+                // Init Particles
+                for(let i=0; i<150; i++) particles.push(new Particle());
+                
                 animate();
-            } catch (e) { alert("Error: សូមផ្តល់សិទ្ធិ Share Audio!"); }
+
+                // Stop sharing handling
+                stream.getVideoTracks()[0].onended = () => {
+                    alert("Capture stopped. Refresh to restart.");
+                };
+
+            } catch (err) {
+                console.error(err);
+                alert("Error: Please select 'Share Audio' checkbox!");
+            }
         }
 
-        function setMode(m) {
-            currentMode = m;
-            document.querySelectorAll('.btn').forEach(b => b.classList.remove('active'));
-            document.getElementById('m-'+m).classList.add('active');
-        }
-
+        // 2. Visualizer Engine
         function animate() {
             requestAnimationFrame(animate);
             analyser.getByteFrequencyData(dataArray);
 
-            // គណនាកម្លាំងភ្លេង (Volume/Intensity)
-            let total = 0;
-            for(let i=0; i<dataArray.length; i++) total += dataArray[i];
-            let avg = total / dataArray.length; // កម្លាំងសម្លេងមធ្យម
+            // Calculate Volume metrics
+            let sum = 0;
+            let bassSum = 0;
+            for(let i=0; i<dataArray.length; i++) {
+                sum += dataArray[i];
+                if(i < 50) bassSum += dataArray[i]; // Bass frequencies
+            }
+            let avg = sum / dataArray.length;
+            let bass = bassSum / 50;
             
-            // ១. ពណ៌ប្តូរលឿនតាមល្បឿនភ្លេង
-            let speed = 0.1 + (avg / 50); 
-            hue += speed;
+            // Dynamic Color
+            hue += 0.2 + (bass / 100); 
             if(hue > 360) hue = 0;
+            const color = `hsl(${hue}, 100%, 50%)`;
 
-            const activeColor = `hsl(${hue}, 100%, 50%)`;
-            const glowColor = `hsl(${hue}, 100%, 50%, 0.5)`;
-
-            // ២. អាប់ដេតពណ៌ម៉ោង
-            const timeEl = document.getElementById('time');
-            timeEl.style.color = activeColor;
-            timeEl.style.textShadow = `0 0 ${avg/2}px ${activeColor}`;
-
-            ctx.fillStyle = `rgba(2, 2, 5, ${0.15 + (avg/1000)})`; // Background បុកតាម Bass
+            // Canvas Clear
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.2)'; // Trail effect
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-            // គូរ Particles
-            particles.forEach(p => { p.update(avg); p.draw(); });
-
-            // ៣. គូរ Visualizer
-            const sens = document.getElementById('sens').value;
-            if (currentMode === 'bars') {
-                let barWidth = (canvas.width / dataArray.length) * 2;
-                for (let i = 0; i < dataArray.length; i++) {
-                    let h = dataArray[i] * sens;
-                    ctx.fillStyle = `hsl(${hue + (i*2)}, 80%, 50%)`;
-                    ctx.shadowBlur = avg/5;
-                    ctx.shadowColor = glowColor;
-                    ctx.fillRect(i * barWidth, canvas.height - h, barWidth - 2, h);
-                }
+            // Bass Shake Effect
+            const shouldShake = document.getElementById('shakeToggle').checked && bass > 200;
+            if (shouldShake) {
+                document.body.classList.add('bass-shake');
             } else {
-                const cx = canvas.width/2, cy = canvas.height/2;
-                for (let i = 0; i < dataArray.length; i++) {
-                    let h = dataArray[i] * (sens/2);
-                    let angle = (i * 2 * Math.PI) / dataArray.length;
-                    ctx.strokeStyle = activeColor;
-                    ctx.lineWidth = 3;
-                    ctx.beginPath();
-                    ctx.moveTo(cx + Math.cos(angle)*150, cy + Math.sin(angle)*150);
-                    ctx.lineTo(cx + Math.cos(angle)*(150+h), cy + Math.sin(angle)*(150+h));
-                    ctx.stroke();
-                }
+                document.body.classList.remove('bass-shake');
+            }
+
+            // Sync Clock Color
+            document.getElementById('time').style.color = color;
+            document.getElementById('time').style.textShadow = `0 0 ${bass/5}px ${color}`;
+
+            // Draw Mode
+            const sens = document.getElementById('sens').value;
+            
+            if (currentMode === 'mirror') {
+                drawMirrorBars(dataArray, color, sens);
+            } else if (currentMode === 'circle') {
+                drawCircle(dataArray, color, sens, bass);
+            } else if (currentMode === 'warp') {
+                drawStarfield(bass, color);
             }
         }
 
-        function clock() {
-            const now = new Date();
-            document.getElementById('time').innerText = now.toLocaleTimeString('en-GB', {hour12:false});
-            document.getElementById('date').innerText = now.toLocaleDateString('km-KH', {weekday:'long', day:'numeric', month:'long', year:'numeric'});
+        // --- Drawing Functions ---
+        function drawMirrorBars(data, color, sens) {
+            const barWidth = (canvas.width / data.length) * 2;
+            const centerY = canvas.height / 2;
+            
+            for (let i = 0; i < data.length; i++) {
+                const h = data[i] * sens;
+                ctx.fillStyle = color;
+                ctx.shadowBlur = 20;
+                ctx.shadowColor = color;
+                
+                // Top
+                ctx.fillRect(i * barWidth, centerY - h/2, barWidth - 1, h/2);
+                // Bottom (Mirror)
+                ctx.fillRect(i * barWidth, centerY, barWidth - 1, h/2);
+            }
         }
-        setInterval(clock, 1000); clock();
+
+        function drawCircle(data, color, sens, bass) {
+            const cx = canvas.width/2;
+            const cy = canvas.height/2;
+            const radius = 150 + (bass * 0.3);
+
+            ctx.beginPath();
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 3;
+            
+            for (let i = 0; i < data.length; i++) {
+                const angle = (i * 2 * Math.PI) / data.length;
+                const h = data[i] * (sens * 0.8);
+                
+                const x1 = cx + Math.cos(angle) * radius;
+                const y1 = cy + Math.sin(angle) * radius;
+                const x2 = cx + Math.cos(angle) * (radius + h);
+                const y2 = cy + Math.sin(angle) * (radius + h);
+
+                ctx.moveTo(x1, y1);
+                ctx.lineTo(x2, y2);
+            }
+            ctx.stroke();
+        }
+
+        class Particle {
+            constructor() { this.reset(); }
+            reset() {
+                this.x = (Math.random() - 0.5) * canvas.width * 2;
+                this.y = (Math.random() - 0.5) * canvas.height * 2;
+                this.z = Math.random() * canvas.width;
+            }
+            update(speed) {
+                this.z -= speed;
+                if (this.z <= 0) this.reset();
+            }
+            draw(color) {
+                let sx = (this.x / this.z) * canvas.width + canvas.width/2;
+                let sy = (this.y / this.z) * canvas.height + canvas.height/2;
+                let size = (canvas.width - this.z) / canvas.width * 5;
+                
+                ctx.fillStyle = color;
+                ctx.beginPath();
+                ctx.arc(sx, sy, size, 0, Math.PI*2);
+                ctx.fill();
+            }
+        }
+
+        function drawStarfield(bass, color) {
+            let speed = 5 + (bass / 5);
+            particles.forEach(p => {
+                p.update(speed);
+                p.draw(color);
+            });
+        }
+
+        // 3. Recording Functionality
+        function toggleRecording() {
+            const btn = document.getElementById('recBtn');
+            const indicator = document.getElementById('recIndicator');
+
+            if (!isRecording) {
+                // Start Recording
+                const canvasStream = canvas.captureStream(60); // 60 FPS
+                const audioStream = dest.stream;
+                
+                // Combine streams
+                const combinedStream = new MediaStream([
+                    ...canvasStream.getVideoTracks(),
+                    ...audioStream.getAudioTracks()
+                ]);
+
+                mediaRecorder = new MediaRecorder(combinedStream, { mimeType: 'video/webm; codecs=vp9' });
+                recordedChunks = [];
+
+                mediaRecorder.ondataavailable = (e) => {
+                    if (e.data.size > 0) recordedChunks.push(e.data);
+                };
+
+                mediaRecorder.onstop = () => {
+                    const blob = new Blob(recordedChunks, { type: 'video/webm' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `Visualizer_Recording_${Date.now()}.webm`;
+                    a.click();
+                };
+
+                mediaRecorder.start();
+                isRecording = true;
+                btn.innerHTML = "⏹ Stop & Save";
+                indicator.style.display = 'flex';
+                
+            } else {
+                // Stop Recording
+                mediaRecorder.stop();
+                isRecording = false;
+                btn.innerHTML = "🔴 Start Recording";
+                indicator.style.display = 'none';
+            }
+        }
+
+        // 4. Background Upload
+        document.getElementById('bgInput').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            const url = URL.createObjectURL(file);
+            const bgLayer = document.getElementById('bg-layer');
+            bgLayer.innerHTML = ''; // Clear old
+
+            if (file.type.startsWith('video')) {
+                const vid = document.createElement('video');
+                vid.src = url;
+                vid.id = 'bg-video';
+                vid.autoplay = true;
+                vid.loop = true;
+                vid.muted = true;
+                bgLayer.appendChild(vid);
+            } else {
+                bgLayer.style.backgroundImage = `url(${url})`;
+            }
+        });
+
+        // 5. Utilities
+        function setMode(mode) {
+            currentMode = mode;
+        }
+
+        function toggleUI() {
+            document.getElementById('ui-layer').classList.toggle('hidden');
+            document.getElementById('controls').classList.toggle('collapsed');
+        }
+
+        // Shortcut Key 'H' to toggle UI
+        document.addEventListener('keydown', (e) => {
+            if(e.key.toLowerCase() === 'h') toggleUI();
+        });
+
+        // Clock
+        setInterval(() => {
+            const now = new Date();
+            document.getElementById('time').innerText = now.toLocaleTimeString('en-GB', {hour12: false});
+            document.getElementById('date').innerText = now.toLocaleDateString('en-US', {weekday:'long', month:'short', day:'numeric'}).toUpperCase();
+        }, 1000);
+
     </script>
 </body>
 </html>
