@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="km">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ultimate Cyber RGB Visualizer V2</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Kantumruy+Pro:wght@300;700&display=swap');
+
+        :root {
+            --primary-glow: #00f2ff;
+            --bg-dark: #020205;
+        }
+
+        body, html {
+            margin: 0; padding: 0; width: 100%; height: 100%;
+            background-color: var(--bg-dark);
+            color: white; font-family: 'Kantumruy Pro', sans-serif;
+            overflow: hidden;
+        }
+
+        .grid-bg {
+            position: fixed; inset: 0;
+            background-image: linear-gradient(rgba(0, 242, 255, 0.03) 1px, transparent 1px),
+                              linear-gradient(90deg, rgba(0, 242, 255, 0.03) 1px, transparent 1px);
+            background-size: 60px 60px; z-index: 0;
+        }
+
+        canvas { position: absolute; top: 0; left: 0; z-index: 1; }
+
+        .interface {
+            position: relative; z-index: 10;
+            height: 100vh; display: flex; flex-direction: column;
+            justify-content: space-between; padding: 40px; box-sizing: border-box;
+            pointer-events: none;
+        }
+
+        /* ម៉ោងប្តូរពណ៌ */
+        .clock-box {
+            background: rgba(0, 0, 0, 0.5);
+            padding: 20px; border-left: 5px solid var(--primary-glow);
+            backdrop-filter: blur(15px); transition: 0.3s;
+        }
+        #time { font-family: 'Orbitron'; font-size: 4rem; line-height: 1; transition: 0.1s; }
+        #date { font-size: 1rem; opacity: 0.7; margin-top: 5px; }
+
+        /* ឈ្មោះបទចម្រៀង */
+        .song-info {
+            position: absolute; top: 60%; left: 50%; transform: translate(-50%, -50%);
+            text-align: center; pointer-events: auto;
+        }
+        .song-title-input {
+            background: none; border: none; color: white; font-family: 'Orbitron';
+            font-size: 2.2rem; text-align: center; width: 80vw; outline: none;
+            text-shadow: 0 0 10px rgba(255,255,255,0.5);
+        }
+
+        /* ផ្ទាំង Settings */
+        .controls {
+            position: fixed; right: 25px; top: 25px;
+            background: rgba(10, 10, 20, 0.9); padding: 25px;
+            border-radius: 15px; border: 1px solid rgba(0, 242, 255, 0.2);
+            display: flex; flex-direction: column; gap: 12px;
+            pointer-events: auto; z-index: 100;
+            transition: 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .controls.collapsed { transform: translateX(calc(100% + 40px)); }
+
+        .btn-toggle {
+            position: fixed; right: 25px; top: 25px;
+            z-index: 101; pointer-events: auto;
+            background: var(--bg-dark); border: 1px solid var(--primary-glow);
+            color: white; padding: 10px; border-radius: 8px; cursor: pointer;
+        }
+
+        .btn {
+            background: rgba(255,255,255,0.05); border: 1px solid var(--primary-glow);
+            color: white; padding: 8px; border-radius: 5px; cursor: pointer; font-size: 0.9rem;
+        }
+        .btn.active { background: var(--primary-glow); color: black; font-weight: bold; }
+
+        .setup-screen {
+            position: fixed; inset: 0; background: #000;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            z-index: 9999;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="grid-bg"></div>
+    
+    <div id="setup" class="setup-screen">
+        <h1 style="color: #00f2ff; font-family: 'Orbitron'; letter-spacing: 5px;">AUDIO SYNC PRO</h1>
+        <button class="btn" onclick="startSystemAudio()" style="padding: 15px 50px; font-size: 1.2rem;">CONNECT SYSTEM AUDIO</button>
+        <p style="margin-top: 20px; opacity: 0.6;">(កុំភ្លេច Tick លើ "Share system audio")</p>
+    </div>
+
+    <canvas id="mainCanvas"></canvas>
+
+    <div class="interface">
+        <div class="clock-box">
+            <div id="time">00:00:00</div>
+            <div id="date">LOADING...</div>
+        </div>
+
+        <div class="song-info">
+            <input type="text" class="song-title-input" value="NOW PLAYING: TYPE SONG NAME" onclick="this.select()">
+        </div>
+    </div>
+
+    <button class="btn-toggle" onclick="document.getElementById('controls').classList.toggle('collapsed')">⚙️ Settings</button>
+
+    <div class="controls collapsed" id="controls">
+        <h3 style="margin: 0; color: var(--primary-glow);">SETTINGS</h3>
+        <label>Visual Mode:</label>
+        <button class="btn active" id="m-bars" onclick="setMode('bars')">Bar Spectrum</button>
+        <button class="btn" id="m-circle" onclick="setMode('circle')">Radial Circle</button>
+        
+        <label>Intensity (Bass):</label>
+        <input type="range" id="sens" min="1" max="10" value="3">
+        
+        <p style="font-size: 0.7rem; opacity: 0.5;">* ពណ៌នឹងប្តូរលឿនតាមចង្វាក់ភ្លេង</p>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('mainCanvas');
+        const ctx = canvas.getContext('2d');
+        let audioCtx, analyser, dataArray;
+        let hue = 180;
+        let currentMode = 'bars';
+        let particles = [];
+
+        function resize() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        window.onresize = resize;
+        resize();
+
+        class Particle {
+            constructor() { this.reset(); }
+            reset() {
+                this.x = Math.random() * canvas.width;
+                this.y = Math.random() * canvas.height;
+                this.size = Math.random() * 2 + 1;
+                this.vx = (Math.random() - 0.5) * 2;
+                this.vy = (Math.random() - 0.5) * 2;
+                this.life = Math.random();
+            }
+            update(vol) {
+                this.x += this.vx * (vol * 0.1);
+                this.y += this.vy * (vol * 0.1);
+                if (this.x < 0 || this.x > canvas.width || this.y < 0 || this.y > canvas.height) this.reset();
+            }
+            draw() {
+                ctx.fillStyle = `hsla(${hue}, 100%, 70%, ${this.life})`;
+                ctx.beginPath(); ctx.arc(this.x, this.y, this.size, 0, Math.PI*2); ctx.fill();
+            }
+        }
+
+        for(let i=0; i<100; i++) particles.push(new Particle());
+
+        async function startSystemAudio() {
+            try {
+                const stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
+                audioCtx = new AudioContext();
+                analyser = audioCtx.createAnalyser();
+                audioCtx.createMediaStreamSource(stream).connect(analyser);
+                analyser.fftSize = 256;
+                dataArray = new Uint8Array(analyser.frequencyBinCount);
+                document.getElementById('setup').style.display = 'none';
+                animate();
+            } catch (e) { alert("Error: សូមផ្តល់សិទ្ធិ Share Audio!"); }
+        }
+
+        function setMode(m) {
+            currentMode = m;
+            document.querySelectorAll('.btn').forEach(b => b.classList.remove('active'));
+            document.getElementById('m-'+m).classList.add('active');
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            analyser.getByteFrequencyData(dataArray);
+
+            // គណនាកម្លាំងភ្លេង (Volume/Intensity)
+            let total = 0;
+            for(let i=0; i<dataArray.length; i++) total += dataArray[i];
+            let avg = total / dataArray.length; // កម្លាំងសម្លេងមធ្យម
+            
+            // ១. ពណ៌ប្តូរលឿនតាមល្បឿនភ្លេង
+            let speed = 0.1 + (avg / 50); 
+            hue += speed;
+            if(hue > 360) hue = 0;
+
+            const activeColor = `hsl(${hue}, 100%, 50%)`;
+            const glowColor = `hsl(${hue}, 100%, 50%, 0.5)`;
+
+            // ២. អាប់ដេតពណ៌ម៉ោង
+            const timeEl = document.getElementById('time');
+            timeEl.style.color = activeColor;
+            timeEl.style.textShadow = `0 0 ${avg/2}px ${activeColor}`;
+
+            ctx.fillStyle = `rgba(2, 2, 5, ${0.15 + (avg/1000)})`; // Background បុកតាម Bass
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // គូរ Particles
+            particles.forEach(p => { p.update(avg); p.draw(); });
+
+            // ៣. គូរ Visualizer
+            const sens = document.getElementById('sens').value;
+            if (currentMode === 'bars') {
+                let barWidth = (canvas.width / dataArray.length) * 2;
+                for (let i = 0; i < dataArray.length; i++) {
+                    let h = dataArray[i] * sens;
+                    ctx.fillStyle = `hsl(${hue + (i*2)}, 80%, 50%)`;
+                    ctx.shadowBlur = avg/5;
+                    ctx.shadowColor = glowColor;
+                    ctx.fillRect(i * barWidth, canvas.height - h, barWidth - 2, h);
+                }
+            } else {
+                const cx = canvas.width/2, cy = canvas.height/2;
+                for (let i = 0; i < dataArray.length; i++) {
+                    let h = dataArray[i] * (sens/2);
+                    let angle = (i * 2 * Math.PI) / dataArray.length;
+                    ctx.strokeStyle = activeColor;
+                    ctx.lineWidth = 3;
+                    ctx.beginPath();
+                    ctx.moveTo(cx + Math.cos(angle)*150, cy + Math.sin(angle)*150);
+                    ctx.lineTo(cx + Math.cos(angle)*(150+h), cy + Math.sin(angle)*(150+h));
+                    ctx.stroke();
+                }
+            }
+        }
+
+        function clock() {
+            const now = new Date();
+            document.getElementById('time').innerText = now.toLocaleTimeString('en-GB', {hour12:false});
+            document.getElementById('date').innerText = now.toLocaleDateString('km-KH', {weekday:'long', day:'numeric', month:'long', year:'numeric'});
+        }
+        setInterval(clock, 1000); clock();
+    </script>
+</body>
+</html>
